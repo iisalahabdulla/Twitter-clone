@@ -60,38 +60,44 @@ const updateCache = (
     tweetId: string
   },
   action: 'like' | 'unlike',
-) => {}
+) => {
 client.setQueryData(['tweet', 'timeline', { limit: 10 }], (oldData: any) => {
-    const newPages = oldData.pages.map(
-      (page: { tweets: { id: string; likes: { id: string }[] }[] }) => {
-        const newTweets = page.tweets.map((tweet) => {
-          if (tweet.id === vaiables.tweetId) {
-            if (action === 'like') {
-              return {
-                ...tweet,
-                likes: [...tweet.likes, { id: data.userId }],
-              }
-            } else {
-              return {
-                ...tweet,
-                likes: tweet.likes.filter((like) => like.id !== data.userId),
-              }
-            }
-          }
-          return tweet
-        })
-        return {
-          ...page,
-          tweets: newTweets,
-        }
-      }
-    );
-    return {
-      ...oldData,
-      pages: newPages,
-    }
-  })
+  
+  // const newPages = oldData.pages.map(
+  //   (page: { tweets: { id: string; likes: { id: string }[] }[] }) => {
+  //     const newTweets = page.tweets.map((tweet) => {
+  //       if (tweet.id === vaiables.tweetId) {
+  //         if (action === 'like') {
+  //           return {
+  //             ...tweet,
+  //             likes: [...tweet.likes, { id: data.userId }],
+  //           }
+  //         } else {
+  //           return {
+  //             ...tweet,
+  //             likes: tweet.likes.filter((like) => like.id !== data.userId),
+  //           }
+  //         }
+  //       }
+  //       return tweet
+  //     })
+  //     return {
+  //       ...page,
+  //       tweets: newTweets,
+  //     }
+  //   }
+  // );
+  // return {
+  //   ...oldData,
+  //   pages: newPages,
+  // }
+
+    
+})
 }
+
+
+
 
 
 const Tweet = ({
