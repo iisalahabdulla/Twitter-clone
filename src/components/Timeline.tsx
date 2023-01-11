@@ -1,117 +1,152 @@
-import React, { useEffect } from 'react'
-import { CreateTweet } from './CreateTweet'
-import { api, RouterOutputs } from '../utils/api'
-import Image from 'next/image'
-import reletiveTime from 'dayjs/plugin/relativeTime'
-import updateLocale from 'dayjs/plugin/updateLocale'
-import dayjs from 'dayjs'
-import { AiFillHeart } from 'react-icons/ai'
-import { QueryClient } from '@tanstack/react-query'
+import Image from "next/image";
+import { RouterInputs, RouterOutputs, trpc } from "../utils/trpc";
+import { CreateTweet } from "./CreateTweet";
 
-dayjs.extend(reletiveTime)
-dayjs.extend(updateLocale)
-dayjs.updateLocale('en', {
+import { useEffect, useState } from "react";
+import { AiFillHeart } from "react-icons/ai";
+import {
+  InfiniteData,
+  QueryClient,
+  useQueryClient,
+} from "@tanstack/react-query";
+
+import Link from "next/link";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import updateLocal from "dayjs/plugin/updateLocale";
+
+dayjs.extend(relativeTime);
+dayjs.extend(updateLocal);
+
+dayjs.updateLocale("en", {
   relativeTime: {
-    future: 'in %s',
-    past: '%s ago',
-    s: 'a few seconds',
-    m: '1m',
-    mm: '%dm',
-    h: '1h',
-    hh: '%dh',
-    d: '1d',
-    dd: '%dd',
-    M: '1m',
-    MM: '%dm',
-    y: '1y',
-    yy: '%dy',
+    future: "in %s",
+    past: "%s",
+    s: "1m",
+    m: "1m",
+    mm: "%dm",
+    h: "1h",
+    hh: "%dh",
+    d: "1d",
+    dd: "%dd",
+    M: "1M",
+    MM: "%dM",
+    y: "1y",
+    yy: "%dy",
   },
-})
+});
 
-const useScrollPosition = () => {
-  const [scrollPosition, setScrollPosition] = React.useState(0)
+function useScrollPosition() {
+  const [scrollPosition, setScrollPosition] = useState(0);
 
   const handleScroll = () => {
     const height =
       document.documentElement.scrollHeight -
-      document.documentElement.clientHeight
-
+      document.documentElement.clientHeight;
     const winScroll =
-      document.body.scrollTop || document.documentElement.scrollTop
+      document.body.scrollTop || document.documentElement.scrollTop;
 
-    const scrolled = (winScroll / height) * 100
+    const scrolled = (winScroll / height) * 100;
+    setScrollPosition(scrolled);
+  };
 
-    setScrollPosition(scrolled)
-  }
-  React.useEffect(() => {
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll, { passive: true });
 
-  return scrollPosition
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  return scrollPosition;
 }
 
-const updateCache = (
-  client: QueryClient,
-  data: {
-    userId: string
-  },
-  vaiables: {
-    tweetId: string
-  },
-  action: 'like' | 'unlike',
-) => {
-client.setQueryData(['tweet', 'timeline', { limit: 10 }], (oldData: any) => {
-  
-  // const newPages = oldData.pages.map(
-  //   (page: { tweets: { id: string; likes: { id: string }[] }[] }) => {
-  //     const newTweets = page.tweets.map((tweet) => {
-  //       if (tweet.id === vaiables.tweetId) {
-  //         if (action === 'like') {
-  //           return {
-  //             ...tweet,
-  //             likes: [...tweet.likes, { id: data.userId }],
-  //           }
-  //         } else {
-  //           return {
-  //             ...tweet,
-  //             likes: tweet.likes.filter((like) => like.id !== data.userId),
-  //           }
-  //         }
-  //       }
-  //       return tweet
-  //     })
-  //     return {
-  //       ...page,
-  //       tweets: newTweets,
-  //     }
-  //   }
-  // );
-  // return {
-  //   ...oldData,
-  //   pages: newPages,
-  // }
+const LIMIT = 10;
 
-    
-})
-}
-
-
-
-
-
-const Tweet = ({
-  tweet,
+function updateCache({
+  client,
+  variables,
+  data,
+  action,
+  input,
 }: {
-  tweet: RouterOutputs['tweet']['timeline']['tweets'][number]
-}) => {
-  const likeMutation = api.tweet.like.useMutation().mutateAsync
-  const unlikeMutation = api.tweet.unlike.useMutation().mutateAsync
-  const hasLiked = tweet.likes.length > 0
+  client: QueryClient;
+  input: RouterInputs["tweet"]["timeline"];
+  variables: {
+    tweetId: string;
+  };
+  data: {
+    userId: string;
+  };
+  action: "like" | "unlike";
+}) {
+  client.setQueryData(
+    [
+      ["tweet", "timeline"],
+      {
+        input,
+        type: "infinite",
+      },
+    ],
+    (oldData) => {
+      const newData = oldData as InfiniteData<
+        RouterOutputs["tweet"]["timeline"]
+      >;
+
+      const value = action === "like" ? 1 : -1;
+
+      const newTweets = newData.pages.map((page) => {
+        return {
+          tweets: page.tweets.map((tweet) => {
+            if (tweet.id === variables.tweetId) {
+              return {
+                ...tweet,
+                likes: action === "like" ? [data.userId] : [],
+                _count: {
+                  likes: tweet._count.likes + value,
+                },
+              };
+            }
+
+            return tweet;
+          }),
+        };
+      });
+
+      return {
+        ...newData,
+        pages: newTweets,
+      };
+    }
+  );
+}
+
+function Tweet({
+  tweet,
+  client,
+  input,
+}: {
+  tweet: RouterOutputs["tweet"]["timeline"]["tweets"][number];
+  client: QueryClient;
+  input: RouterInputs["tweet"]["timeline"];
+}) {
+  const likeMutation = trpc.tweet.like.useMutation({
+    onSuccess: (data, variables) => {
+      updateCache({ client, data, variables, input, action: "like" });
+    },
+  }).mutateAsync;
+  const unlikeMutation = trpc.tweet.unlike.useMutation({
+    onSuccess: (data, variables) => {
+      updateCache({ client, data, variables, input, action: "unlike" });
+    },
+  }).mutateAsync;
+
+  const hasLiked = tweet.likes.length > 0;
+
   return (
     <div className="mb-4 border-b-2 border-gray-500">
       <div className="flex p-2">
-        {tweet.author.image && tweet.author.name && (
+        {tweet.author.image && (
           <Image
             src={tweet.author.image}
             alt={`${tweet.author.name} profile picture`}
@@ -120,78 +155,93 @@ const Tweet = ({
             className="rounded-full"
           />
         )}
+
         <div className="ml-2">
-          <div className="flex items-center ">
-            <p className="font-bold">{tweet.author.name}</p>
-            <p className="text-sm text-gray400">
+          <div className="flex items-center">
+            <p className="font-bold">
+              <Link href={`/${tweet.author.name}`}>{tweet.author.name}</Link>
+            </p>
+            <p className="pl-1 text-xs text-gray-500">
               - {dayjs(tweet.createdAt).fromNow()}
             </p>
           </div>
-          <div>
-            <p>{tweet.text}</p>
-          </div>
+
+          <div>{tweet.text}</div>
         </div>
       </div>
-      <div className="flex items-center p-2 mt-4">
+
+      <div className="mt-4 flex items-center p-2">
         <AiFillHeart
-          color={hasLiked ? 'red' : 'gray'}
+          color={hasLiked ? "red" : "gray"}
           size="1.5rem"
-          onClick={() =>
-            hasLiked
-              ? unlikeMutation({
-                  tweetId: tweet.id,
-                })
-              : likeMutation({
-                  tweetId: tweet.id,
-                })
-          }
+          onClick={() => {
+            if (hasLiked) {
+              unlikeMutation({
+                tweetId: tweet.id,
+              });
+              return;
+            }
+
+            likeMutation({
+              tweetId: tweet.id,
+            });
+          }}
         />
-        <span className="text-sm text-gray-500">
-          {10}
-          {/* {tweet.likes.length} {tweet.likes.length === 1 ? 'like' : 'likes'} */}
-        </span>
+
+        <span className="text-sm text-gray-500">{tweet._count.likes}</span>
       </div>
     </div>
-  )
+  );
 }
 
-const Timeline = () => {
-  const {
-    data,
-    hasNextPage,
-    fetchNextPage,
-    isFetching,
-  } = api.tweet.timeline.useInfiniteQuery(
-    {
-      limit: 10,
-    },
-    {
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-    },
-  )
+export function Timeline({
+  where = {},
+}: {
+  where: RouterInputs["tweet"]["timeline"]["where"];
+}) {
+  const scrollPosition = useScrollPosition();
 
-  const scrollPosition = useScrollPosition()
-  const tweets = data?.pages.flatMap((page) => page.tweets) ?? []
+  const { data, hasNextPage, fetchNextPage, isFetching } =
+    trpc.tweet.timeline.useInfiniteQuery(
+      {
+        limit: LIMIT,
+        where,
+      },
+      {
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      }
+    );
+
+  const client = useQueryClient();
+
+  const tweets = data?.pages.flatMap((page) => page.tweets) ?? [];
 
   useEffect(() => {
     if (scrollPosition > 90 && hasNextPage && !isFetching) {
-      fetchNextPage()
+      fetchNextPage();
     }
-  }, [scrollPosition, hasNextPage, isFetching, fetchNextPage])
+  }, [scrollPosition, hasNextPage, isFetching, fetchNextPage]);
 
   return (
     <div>
       <CreateTweet />
-      <div className="border-t-2 border-l-2 border-r-2 border-gray-500 ">
+      <div className="border-l-2 border-r-2 border-t-2 border-gray-500">
         {tweets.map((tweet) => {
-          return <Tweet key={tweet.id} tweet={tweet} />
+          return (
+            <Tweet
+              key={tweet.id}
+              tweet={tweet}
+              client={client}
+              input={{
+                where,
+                limit: LIMIT,
+              }}
+            />
+          );
         })}
-        {!hasNextPage && (
-          <div className="text-center text-gray-400">No more tweets</div>
-        )}
+
+        {!hasNextPage && <p>No more items to load</p>}
       </div>
     </div>
-  )
+  );
 }
-
-export default Timeline

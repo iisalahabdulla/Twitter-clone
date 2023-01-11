@@ -3,11 +3,11 @@ import Head from "next/head";
 import Link from "next/link";
 import { signIn, signOut, useSession } from "next-auth/react";
 
-import { api } from "../utils/api";
-import Timeline from "../components/Timeline";
+import { trpc } from "../utils/trpc";
+import { Timeline } from "../components/Timeline";
 
 const Home: NextPage = () => {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
 
   return (
     <>
@@ -17,13 +17,10 @@ const Home: NextPage = () => {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <div>
-        
-          <Timeline/>
-
+        <Timeline />
       </div>
     </>
   );
 };
 
 export default Home;
-
